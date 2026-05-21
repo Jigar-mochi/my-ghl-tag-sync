@@ -7,6 +7,8 @@ const webhookLogSchema = new mongoose.Schema({
     email: { type: String },
     phone: { type: String },
     tags: [{ type: String }],
+    addedTags: [{ type: String }],
+    removedTags: [{ type: String }],
     payload: { type: mongoose.Schema.Types.Mixed }, // Store the entire raw JSON payload
     receivedAt: { type: Date, default: Date.now }
 });

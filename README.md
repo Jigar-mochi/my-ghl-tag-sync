@@ -16,15 +16,24 @@ Open the `.env` file and make sure `MONGODB_URI` points to your active database 
 MONGODB_URI=mongodb://127.0.0.1:27017/ghl-webhooks
 ```
 
-### 2. Run the Server
-Install dependencies (if you haven't) and start the server:
+### 2. Run the Backend Server
+Install dependencies (if you haven't) and start the Node.js API server on port 3000:
 ```bash
 npm install
 npm start
 ```
 You should see: `Secure server running on http://localhost:3000`
 
-### 2. Expose Localhost (for testing)
+### 3. Run the React Frontend Dashboard
+We have built a premium React dashboard to visualize your webhook data and tag additions/removals!
+Open a **second terminal window** and run:
+```bash
+cd frontend
+npm run dev
+```
+You can now visit your dashboard at `http://localhost:5173`.
+
+### 4. Expose Localhost (for webhooks)
 Since GHL cannot send webhooks directly to `localhost`, expose it using `ngrok` in a new terminal window:
 ```bash
 ngrok http 3000

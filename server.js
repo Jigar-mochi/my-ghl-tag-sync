@@ -1,10 +1,13 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors');
 const verifySignature = require('./utils/verifySignature');
 const WebhookLog = require('./models/WebhookLog');
+const Contact = require('./models/Contact');
 
 const app = express();
+app.use(cors()); // Allow frontend to fetch data
 const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
@@ -50,20 +53,66 @@ app.post('/webhook', (req, res) => {
     console.log('====================\n');
     console.log('Verification: SUCCESS');
 
-    // 5. Save to MongoDB
-    const logEntry = new WebhookLog({
-        eventType: payload.type || 'Unknown',
-        contactId: payload.contactId || payload.id,
-        contactName: `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
-        email: payload.email,
-        phone: payload.phone,
-        tags: Array.isArray(payload.tags) ? payload.tags : [],
-        payload: payload
-    });
-    
-    logEntry.save()
-        .then(() => console.log('✅ Webhook saved to MongoDB successfully.'))
-        .catch(err => console.error('❌ Error saving to MongoDB:', err));
+    // 5. Calculate Tag Diffs & Save to MongoDB
+    (async () => {
+        try {
+            const incomingTags = Array.isArray(payload.tags) ? payload.tags : [];
+            const contactId = payload.contactId || payload.id;
+            
+            let addedTags = [];
+            let removedTags = [];
+
+            if (contactId && payload.type === 'ContactTagUpdate') {
+                // Find existing contact to get previous tags
+                let contact = await Contact.findOne({ contactId: contactId });
+                
+                if (contact) {
+                    const previousTags = contact.tags || [];
+                    addedTags = incomingTags.filter(t => !previousTags.includes(t));
+                    removedTags = previousTags.filter(t => !incomingTags.includes(t));
+                    
+                    contact.tags = incomingTags;
+                    contact.contactName = `${payload.firstName || ''} ${payload.lastName || ''}`.trim();
+                    contact.email = payload.email;
+                    contact.phone = payload.phone;
+                    contact.lastUpdated = new Date();
+                    await contact.save();
+                } else {
+                    // First time seeing this contact
+                    addedTags = incomingTags;
+                    contact = new Contact({
+                        contactId: contactId,
+                        contactName: `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
+                        email: payload.email,
+                        phone: payload.phone,
+                        tags: incomingTags
+                    });
+                    await contact.save();
+                }
+            }
+
+            const logEntry = new WebhookLog({
+                eventType: payload.type || 'Unknown',
+                contactId: contactId,
+                contactName: `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
+                email: payload.email,
+                phone: payload.phone,
+                tags: incomingTags,
+                addedTags: addedTags,
+                removedTags: removedTags,
+                payload: payload
+            });
+            
+            await logEntry.save();
+            console.log('✅ Webhook & Tag diffs saved to MongoDB successfully.');
+            
+            if (addedTags.length > 0) console.log(`[++] Added Tags: ${addedTags.join(', ')}`);
+            if (removedTags.length > 0) console.log(`[--] Removed Tags: ${removedTags.join(', ')}`);
+            
+        } catch (err) {
+            console.error('❌ Error saving to MongoDB:', err);
+        }
+    })();
 
     // 6. Print webhook data
     if (payload.type === 'ContactTagUpdate') {
@@ -95,6 +144,43 @@ app.post('/webhook', (req, res) => {
 
     // 7. Return 200
     res.status(200).send('Webhook received and verified');
+});
+
+// GET /api/logs - Fetch recent webhook logs for the frontend
+app.get('/api/logs', async (req, res) => {
+    try {
+        const logs = await WebhookLog.find().sort({ receivedAt: -1 }).limit(50);
+        res.json(logs);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch logs' });
+    }
+});
+
+// GET /api/stats - Fetch analytics for the frontend dashboard
+app.get('/api/stats', async (req, res) => {
+    try {
+        const totalWebhooks = await WebhookLog.countDocuments();
+        
+        // Aggregate tags added and removed from recent logs
+        const recentLogs = await WebhookLog.find({ eventType: 'ContactTagUpdate' }).sort({ receivedAt: -1 }).limit(100);
+        
+        let tagsAddedCount = 0;
+        let tagsRemovedCount = 0;
+        
+        recentLogs.forEach(log => {
+            tagsAddedCount += (log.addedTags && log.addedTags.length) || 0;
+            tagsRemovedCount += (log.removedTags && log.removedTags.length) || 0;
+        });
+
+        res.json({
+            totalWebhooks,
+            recentTagsAdded: tagsAddedCount,
+            recentTagsRemoved: tagsRemovedCount,
+            recentLogs
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch stats' });
+    }
 });
 
 // Start the server
