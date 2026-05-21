@@ -1,79 +1,71 @@
-# GoHighLevel Webhook Server
+# Secure GoHighLevel Webhook Server
 
-A very simple, beginner-friendly Node.js server to receive and log GoHighLevel Marketplace App webhooks.
+A secure, beginner-friendly Node.js server that receives GoHighLevel Marketplace App webhooks and verifies their authenticity using official GHL cryptographic signatures (Ed25519 & RSA).
+
+## Features
+- **Official Security**: Uses native Node.js crypto to verify `X-GHL-Signature` and `X-WH-Signature`.
+- **Raw Body Handling**: Implements Express.js `req.rawBody` correctly to prevent signature corruption.
+- **Zero Dependencies**: Relies solely on native Node.js `crypto`. No Axios, Redis, MongoDB, or complex architecture.
 
 ## Setup Instructions
 
-### 1. Install Node.js
-Download and install Node.js from [nodejs.org](https://nodejs.org/) if you haven't already.
-
-### 2. Create project
-*(Skip if you downloaded this repository directly)*
+### 1. Run the Server
+Install dependencies (if you haven't) and start the server:
 ```bash
-mkdir ghl-webhook-server
-cd ghl-webhook-server
-npm init -y
+npm install
+npm start
 ```
+You should see: `Secure server running on http://localhost:3000`
 
-### 3. Install dependencies
-Install the required packages (Express and dotenv):
-```bash
-npm install express dotenv
-```
-
-### 4. Run server
-Start the application:
-```bash
-node server.js
-```
-You should see: `Server running on http://localhost:3000`
-
-### 5. Install ngrok
-Since GoHighLevel cannot reach `localhost` directly, we need a way to expose your local server to the internet.
-- Download and install [ngrok](https://ngrok.com/download)
-- Follow their instructions to add your auth token.
-
-### 6. Expose localhost
-In a **new terminal window**, run:
+### 2. Expose Localhost (for testing)
+Since GHL cannot send webhooks directly to `localhost`, expose it using `ngrok` in a new terminal window:
 ```bash
 ngrok http 3000
 ```
-Copy the `Forwarding` URL that starts with `https://` (e.g., `https://abcd-1234.ngrok-free.app`).
+Copy the `https://` Forwarding URL.
 
-### 7. Configure webhook URL in GoHighLevel
-1. Go to your GoHighLevel account.
-2. Navigate to Automations -> Create Workflow.
-3. Add a Trigger (e.g., Contact Tag).
-4. Add an Action: **Webhook**.
-5. Set Method to `POST`.
-6. Paste your ngrok URL with `/webhook` at the end (e.g., `https://abcd-1234.ngrok-free.app/webhook`).
-7. Save and Publish.
+### 3. Test Using GoHighLevel
+1. In your GoHighLevel agency/sub-account, go to **Automations -> Create Workflow**.
+2. Add a Trigger: **Contact Tag** (Tag Added or Removed).
+3. Add an Action: **Webhook**.
+4. Set Method to `POST`.
+5. Paste your ngrok URL with `/webhook` at the end.
+6. **Save and Publish**.
+7. Go to **Contacts**, pick a test contact, and add a tag (e.g., `VIP`).
 
-### 8. How to trigger tag update
-1. Go to the **Contacts** tab in GoHighLevel.
-2. Select a test contact.
-3. Add a new tag (e.g., `VIP`) or remove one.
-
-### 9. How to verify webhook is working
-Look at the terminal where `node server.js` is running. You should see a log like this:
-
-```
+### 4. Verify Security Works
+In your terminal, you should see a successful verification log:
+```text
 ================================
-NEW GHL WEBHOOK RECEIVED
-========================
+GHL WEBHOOK VERIFIED
+====================
 
+Verification: SUCCESS
 Event Type: ContactTagUpdate
-Contact ID: abc123
-Location ID: loc123
 
 Tags:
 * VIP
-* Booked Call
-
-Full Payload:
-{
-  ...
-}
+* Customer
 
 ================================
 ```
+
+### 5. Intentionally Test Failed Requests
+You can verify the security by intentionally sending a fake request. Open another terminal and use `curl` to send a fake payload without a valid signature:
+```bash
+curl -X POST http://localhost:3000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ContactTagUpdate","tags":["FakeTag"]}'
+```
+In your server terminal, you will see it get cleanly rejected:
+```text
+================================
+INVALID GHL WEBHOOK
+===================
+
+Reason:
+Missing signature header
+
+================================
+```
+The fake request will receive an `HTTP 401 Unauthorized` response.
