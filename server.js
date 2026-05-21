@@ -46,6 +46,12 @@ app.post('/webhook', (req, res) => {
     // 5. Print webhook data
     if (payload.type === 'ContactTagUpdate') {
         console.log(`Event Type: ${payload.type}`);
+        console.log(`Contact ID: ${payload.contactId || payload.id || 'N/A'}`);
+        
+        const fullName = `${payload.firstName || ''} ${payload.lastName || ''}`.trim();
+        console.log(`Name: ${fullName || 'N/A'}`);
+        console.log(`Email: ${payload.email || 'N/A'}`);
+        console.log(`Phone: ${payload.phone || 'N/A'}`);
         console.log('');
         console.log('Tags:');
         
@@ -59,6 +65,9 @@ app.post('/webhook', (req, res) => {
     } else {
         console.log(`Event Type: ${payload.type || 'Unknown'}`);
     }
+
+    console.log('\nFull Payload:');
+    console.log(JSON.stringify(payload, null, 2));
 
     console.log('\n================================\n');
 
