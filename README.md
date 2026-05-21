@@ -9,7 +9,14 @@ A secure, beginner-friendly Node.js server that receives GoHighLevel Marketplace
 
 ## Setup Instructions
 
-### 1. Run the Server
+### 1. Configure MongoDB
+This project requires a MongoDB database to permanently store your webhook logs.
+Open the `.env` file and make sure `MONGODB_URI` points to your active database (e.g., local MongoDB or MongoDB Atlas):
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/ghl-webhooks
+```
+
+### 2. Run the Server
 Install dependencies (if you haven't) and start the server:
 ```bash
 npm install

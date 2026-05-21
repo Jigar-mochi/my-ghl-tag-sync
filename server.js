@@ -1,9 +1,16 @@
 require('dotenv').config();
 const express = require('express');
+const mongoose = require('mongoose');
 const verifySignature = require('./utils/verifySignature');
+const WebhookLog = require('./models/WebhookLog');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('✅ Connected to MongoDB'))
+    .catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
 // IMPORTANT: We must grab the raw request body BEFORE it gets parsed as JSON
 // This is required for accurate signature verification
@@ -43,7 +50,22 @@ app.post('/webhook', (req, res) => {
     console.log('====================\n');
     console.log('Verification: SUCCESS');
 
-    // 5. Print webhook data
+    // 5. Save to MongoDB
+    const logEntry = new WebhookLog({
+        eventType: payload.type || 'Unknown',
+        contactId: payload.contactId || payload.id,
+        contactName: `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
+        email: payload.email,
+        phone: payload.phone,
+        tags: Array.isArray(payload.tags) ? payload.tags : [],
+        payload: payload
+    });
+    
+    logEntry.save()
+        .then(() => console.log('✅ Webhook saved to MongoDB successfully.'))
+        .catch(err => console.error('❌ Error saving to MongoDB:', err));
+
+    // 6. Print webhook data
     if (payload.type === 'ContactTagUpdate') {
         console.log(`Event Type: ${payload.type}`);
         console.log(`Contact ID: ${payload.contactId || payload.id || 'N/A'}`);
@@ -71,7 +93,7 @@ app.post('/webhook', (req, res) => {
 
     console.log('\n================================\n');
 
-    // 6. Return 200
+    // 7. Return 200
     res.status(200).send('Webhook received and verified');
 });
 
